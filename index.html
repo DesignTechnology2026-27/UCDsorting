@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>User-Centred Design Sorting Activity</title>
+<style>
+  :root{
+    --bg:#f5f7fb;
+    --panel:#ffffff;
+    --text:#1f2937;
+    --muted:#6b7280;
+    --border:#d8dee9;
+    --accent:#2563eb;
+    --good:#166534;
+    --goodbg:#dcfce7;
+    --bad:#991b1b;
+    --badbg:#fee2e2;
+    --shadow:0 10px 30px rgba(15,23,42,.08);
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+  .app{
+    max-width:1200px;
+    margin:auto;
+    padding:28px;
+  }
+  h1{margin:0 0 8px;font-size:clamp(28px,4vw,44px)}
+  .sub{color:var(--muted);margin-bottom:20px}
+  .topbar{
+    display:flex;gap:12px;flex-wrap:wrap;align-items:center;
+    margin-bottom:20px;
+  }
+  .stat{
+    background:var(--panel);border:1px solid var(--border);border-radius:12px;
+    padding:10px 14px;box-shadow:var(--shadow);font-weight:700;
+  }
+  button{
+    border:0;border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer;
+    background:#e5e7eb;color:#111827;
+  }
+  button.primary{background:var(--accent);color:white}
+  .layout{
+    display:grid;grid-template-columns:1fr;gap:18px;
+  }
+  .bank,.zone{
+    background:var(--panel);border:1px solid var(--border);border-radius:16px;
+    padding:18px;box-shadow:var(--shadow);
+  }
+  .bank h2,.zone h2{margin-top:0}
+  .cards{
+    display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;
+  }
+  .card{
+    background:white;border:2px solid var(--border);border-radius:12px;padding:14px;
+    cursor:grab;transition:.15s ease;min-height:120px;
+  }
+  .card:hover{transform:translateY(-2px);border-color:#94a3b8}
+  .card.dragging{opacity:.45}
+  .card-title{font-weight:800;margin-bottom:6px}
+  .card-desc{font-size:14px;line-height:1.35;color:#4b5563}
+  .zones{
+    display:grid;grid-template-columns:1fr 1fr;gap:18px;
+  }
+  .zone{
+    min-height:270px;
+    border:2px dashed #b8c0cc;
+  }
+  .zone.over{border-color:var(--accent);background:#eff6ff}
+  .zone[data-type="advantage"] h2{color:var(--good)}
+  .zone[data-type="disadvantage"] h2{color:var(--bad)}
+  .zone .cards{grid-template-columns:1fr}
+  .correct{border-color:#22c55e!important;background:var(--goodbg)!important}
+  .incorrect{border-color:#ef4444!important;background:var(--badbg)!important}
+  .feedback{
+    margin-top:18px;padding:14px 16px;border-radius:12px;
+    background:#eef2ff;color:#3730a3;font-weight:700;display:none;
+  }
+  .instructions{
+    background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px 14px;margin-bottom:18px;
+  }
+  .tap-actions{display:flex;gap:8px;margin-top:10px}
+  .tap-actions button{font-size:12px;padding:7px 9px}
+  @media(max-width:760px){.zones{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>User-Centred Design Sorting Activity</h1>
+  <div class="sub">Sort each statement into <strong>Advantage</strong> or <strong>Disadvantage</strong>.</div>
+
+  <div class="instructions">
+    <strong>How to play:</strong> Drag each card into a category, or use the card buttons. When all cards are sorted, click <strong>Check Answers</strong>.
+  </div>
+
+  <div class="topbar">
+    <div class="stat">Sorted: <span id="sortedCount">0</span>/14</div>
+    <div class="stat">Score: <span id="score">—</span></div>
+    <button class="primary" id="checkBtn">Check Answers</button>
+    <button id="shuffleBtn">Shuffle</button>
+    <button id="resetBtn">Reset</button>
+  </div>
+
+  <section class="bank">
+    <h2>Statement Bank</h2>
+    <div id="bankCards" class="cards"></div>
+  </section>
+
+  <div class="zones">
+    <section class="zone" data-type="advantage">
+      <h2>Advantages of User-Centred Design</h2>
+      <div class="cards"></div>
+    </section>
+    <section class="zone" data-type="disadvantage">
+      <h2>Disadvantages of User-Centred Design</h2>
+      <div class="cards"></div>
+    </section>
+  </div>
+
+  <div id="feedback" class="feedback"></div>
+</div>
+
+<script>
+const items = [
+  {title:"Improved usability",desc:"Products are easier to use since they’re designed around real user needs.",type:"advantage"},
+  {title:"Higher user satisfaction",desc:"Leads to a more positive user experience and stronger customer loyalty.",type:"advantage"},
+  {title:"Reduced risk of failure",desc:"Early testing with users helps identify problems before full-scale production.",type:"advantage"},
+  {title:"Cost efficiency in the long run",desc:"Fixing issues early is cheaper than redesigning after launch.",type:"advantage"},
+  {title:"Increased accessibility and inclusivity",desc:"Considering diverse users ensures broader adoption.",type:"advantage"},
+  {title:"Better alignment with user expectations",desc:"Reduces the gap between what designers create and what users actually want.",type:"advantage"},
+  {title:"Competitive advantage",desc:"Products that meet real needs stand out in the market.",type:"advantage"},
+  {title:"Time-consuming",desc:"Requires extensive research, testing, and iteration.",type:"disadvantage"},
+  {title:"Higher initial costs",desc:"User research, prototyping, and evaluations can be expensive upfront.",type:"disadvantage"},
+  {title:"Complex process",desc:"Involves continuous feedback loops and multidisciplinary collaboration.",type:"disadvantage"},
+  {title:"Risk of bias from users",desc:"Users may not always know or express what they actually need.",type:"disadvantage"},
+  {title:"May stifle innovation",desc:"Too much focus on user input can lead to incremental improvements instead of radical new ideas.",type:"disadvantage"},
+  {title:"Stakeholder conflicts",desc:"Balancing user needs with business goals and technical feasibility can be challenging.",type:"disadvantage"},
+  {title:"Scope creep",desc:"Iterative feedback may cause constant changes, delaying the final design.",type:"disadvantage"}
+];
+
+const bank = document.getElementById("bankCards");
+const zones = document.querySelectorAll(".zone");
+const sortedCount = document.getElementById("sortedCount");
+const scoreEl = document.getElementById("score");
+const feedback = document.getElementById("feedback");
+
+function shuffle(arr){
+  return [...arr].sort(()=>Math.random()-.5);
+}
+
+function makeCard(item,index){
+  const c = document.createElement("div");
+  c.className="card";
+  c.draggable=true;
+  c.dataset.correct=item.type;
+  c.dataset.id=index;
+  c.innerHTML = `
+    <div class="card-title">${item.title}</div>
+    <div class="card-desc">${item.desc}</div>
+    <div class="tap-actions">
+      <button data-move="advantage">Advantage</button>
+      <button data-move="disadvantage">Disadvantage</button>
+    </div>`;
+  c.addEventListener("dragstart",()=>c.classList.add("dragging"));
+  c.addEventListener("dragend",()=>c.classList.remove("dragging"));
+  c.querySelectorAll("[data-move]").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      document.querySelector(`.zone[data-type="${btn.dataset.move}"] .cards`).appendChild(c);
+      clearMark(c); updateCount();
+    });
+  });
+  return c;
+}
+
+function render(list=shuffle(items)){
+  bank.innerHTML="";
+  zones.forEach(z=>z.querySelector(".cards").innerHTML="");
+  list.forEach((item,i)=>bank.appendChild(makeCard(item,i)));
+  scoreEl.textContent="—";
+  feedback.style.display="none";
+  updateCount();
+}
+
+function clearMark(card){
+  card.classList.remove("correct","incorrect");
+}
+
+function updateCount(){
+  const placed = document.querySelectorAll(".zone .card").length;
+  sortedCount.textContent=placed;
+}
+
+zones.forEach(zone=>{
+  zone.addEventListener("dragover",e=>{
+    e.preventDefault(); zone.classList.add("over");
+  });
+  zone.addEventListener("dragleave",()=>zone.classList.remove("over"));
+  zone.addEventListener("drop",e=>{
+    e.preventDefault(); zone.classList.remove("over");
+    const card=document.querySelector(".dragging");
+    if(card){zone.querySelector(".cards").appendChild(card); clearMark(card); updateCount();}
+  });
+});
+
+document.querySelector(".bank").addEventListener("dragover",e=>e.preventDefault());
+document.querySelector(".bank").addEventListener("drop",e=>{
+  e.preventDefault();
+  const card=document.querySelector(".dragging");
+  if(card){bank.appendChild(card); clearMark(card); updateCount();}
+});
+
+document.getElementById("checkBtn").addEventListener("click",()=>{
+  const placed=[...document.querySelectorAll(".zone .card")];
+  if(placed.length<items.length){
+    feedback.style.display="block";
+    feedback.textContent=`You still have ${items.length-placed.length} card(s) left to sort.`;
+    return;
+  }
+  let score=0;
+  placed.forEach(card=>{
+    const zone=card.closest(".zone").dataset.type;
+    if(zone===card.dataset.correct){card.classList.add("correct");card.classList.remove("incorrect");score++;}
+    else{card.classList.add("incorrect");card.classList.remove("correct");}
+  });
+  scoreEl.textContent=`${score}/14`;
+  feedback.style.display="block";
+  feedback.textContent = score===14
+    ? "Perfect! All 14 statements are correctly sorted."
+    : `${score} correct. Red cards are misplaced—move them and check again.`;
+});
+
+document.getElementById("resetBtn").addEventListener("click",()=>render(items));
+document.getElementById("shuffleBtn").addEventListener("click",()=>render(shuffle(items)));
+
+render();
+</script>
+</body>
+</html>
