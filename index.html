@@ -18,6 +18,15 @@
     --badbg:#fee2e2;
     --shadow:0 10px 30px rgba(15,23,42,.08);
   }
+  [hidden]{display:none!important}
+  .sign-in{max-width:560px;margin:28px auto;background:white;padding:24px;border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}
+  .sign-in label{display:block;font-weight:700;margin-bottom:8px}
+  input[type=email]{width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;font:inherit;margin-bottom:14px}
+  button:disabled{opacity:.6;cursor:wait}
+  .submission{padding:12px 14px;border-radius:10px;background:#eff6ff;margin-bottom:18px;overflow-wrap:anywhere}
+  .submission[data-state=success]{background:var(--goodbg);color:var(--good)}
+  .submission[data-state=error]{background:var(--badbg);color:var(--bad)}
+  .student{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px;overflow-wrap:anywhere}
   *{box-sizing:border-box}
   body{
     margin:0;
@@ -94,6 +103,16 @@
   <h1>User-Centred Design Sorting Activity</h1>
   <div class="sub">Sort each statement into <strong>Advantage</strong> or <strong>Disadvantage</strong>.</div>
 
+  <form id="startForm" class="sign-in">
+    <h2>Ready to sort?</h2>
+    <label for="schoolEmail">School email</label>
+    <input id="schoolEmail" type="email" autocomplete="email" placeholder="you@ssis.edu.vn" required aria-describedby="emailHelp" />
+    <p id="emailHelp" class="sub">Use the school email on your class roster. Each completed Check Answers sends your email and score to your teacher’s activity tracker.</p>
+    <button class="primary" type="submit">Start Activity</button>
+  </form>
+  <div id="game" hidden>
+  <div class="student"><strong id="studentLabel"></strong><button id="changeEmailBtn">Change email</button></div>
+  <div id="submission" class="submission" role="status" aria-live="polite" hidden></div>
   <div class="instructions">
     <strong>How to play:</strong> Drag each card into a category, or use the card buttons. When all cards are sorted, click <strong>Check Answers</strong>.
   </div>
@@ -122,10 +141,77 @@
     </section>
   </div>
 
-  <div id="feedback" class="feedback"></div>
+  <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+  </div>
 </div>
 
 <script>
+const ENDPOINT = "https://script.google.com/macros/s/AKfycbwZjHYTIoj0Hi2XLJWVJ6ZTLEKBvapMV46zlBIMi8R8pScenFhnh13Aqch2IydvKfjo/exec";
+const ACTIVITY_ID = "UCD-01";
+const ACTIVITY_NAME = "UCD Advantages & Disadvantages";
+const MAX_SCORE = 14;
+let studentEmail = "";
+let submitting = false;
+const startForm = document.getElementById("startForm");
+const emailInput = document.getElementById("schoolEmail");
+const game = document.getElementById("game");
+const submission = document.getElementById("submission");
+startForm.addEventListener("submit", e => {
+  e.preventDefault();
+  emailInput.value = emailInput.value.trim().toLowerCase();
+  if (!startForm.reportValidity()) return;
+  studentEmail = emailInput.value;
+  document.getElementById("studentLabel").textContent = "Student: " + studentEmail;
+  startForm.hidden = true;
+  game.hidden = false;
+  document.getElementById("checkBtn").focus();
+});
+document.getElementById("changeEmailBtn").addEventListener("click", () => {
+  if (submitting) return;
+  game.hidden = true;
+  startForm.hidden = false;
+  emailInput.focus();
+});
+async function submitScore(score) {
+  submitting = true;
+  const controls = ["checkBtn", "resetBtn", "shuffleBtn", "changeEmailBtn"].map(id => document.getElementById(id));
+  controls.forEach(button => button.disabled = true);
+  submission.hidden = false;
+  submission.dataset.state = "pending";
+  submission.textContent = `Saving ${score}/${MAX_SCORE} for ${studentEmail}… Please keep this page open.`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+  try {
+    // A text/plain content type sends JSON without a cross-origin preflight.
+    // Keep CORS enabled so success requires a readable server confirmation.
+    const response = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({email: studentEmail, activityId: ACTIVITY_ID, activityName: ACTIVITY_NAME, score, maxScore: MAX_SCORE}),
+      redirect: "follow",
+      credentials: "omit",
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error("HTTP " + response.status);
+    const result = await response.json();
+    if (result.success === true) {
+      submission.dataset.state = "success";
+      submission.textContent = `Score recorded: ${score}/${MAX_SCORE}. You can keep practising and check again.`;
+    } else if (result.success === false) {
+      submission.dataset.state = "error";
+      submission.textContent = "Tracker reported an error: " + (result.error || "Unable to record score.") + " Check your school email or ask your teacher for help.";
+    } else {
+      throw new Error("Unexpected tracker response");
+    }
+  } catch (error) {
+    submission.dataset.state = "error";
+    submission.textContent = `Could not confirm that ${score}/${MAX_SCORE} was saved. Check your connection and ask your teacher to check the tracker before submitting again; the attempt may already have arrived.`;
+  } finally {
+    clearTimeout(timeout);
+    submitting = false;
+    controls.forEach(button => button.disabled = false);
+  }
+}
 const items = [
   {title:"Improved usability",desc:"Products are easier to use since they’re designed around real user needs.",type:"advantage"},
   {title:"Higher user satisfaction",desc:"Leads to a more positive user experience and stronger customer loyalty.",type:"advantage"},
@@ -215,6 +301,7 @@ document.querySelector(".bank").addEventListener("drop",e=>{
 });
 
 document.getElementById("checkBtn").addEventListener("click",()=>{
+  if (!studentEmail || submitting) return;
   const placed=[...document.querySelectorAll(".zone .card")];
   if(placed.length<items.length){
     feedback.style.display="block";
@@ -232,6 +319,7 @@ document.getElementById("checkBtn").addEventListener("click",()=>{
   feedback.textContent = score===14
     ? "Perfect! All 14 statements are correctly sorted."
     : `${score} correct. Red cards are misplaced—move them and check again.`;
+  submitScore(score);
 });
 
 document.getElementById("resetBtn").addEventListener("click",()=>render(items));
